@@ -9,6 +9,9 @@ from scipy.signal import convolve2d
 from skimage.color import rgb2ycbcr, ycbcr2rgb
 
 class RichardsonLucy:
+    """
+    tohle je test jestli všechno jede jak má
+    """
 
     def __init__(self, iterations=30, cuda=True, display=False):
         if not isinstance(iterations, int) or iterations < 1:
