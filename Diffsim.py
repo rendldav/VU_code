@@ -9,13 +9,13 @@ class DiffractionPatternSimulator:
         self.image = np.zeros((self.image_size, self.image_size))
         self.x, self.y = np.meshgrid(np.arange(self.image_size), np.arange(self.image_size))
         self.psf_sigma = 1
-        self.psf_gamma = 3
+        self.psf_gamma = 1
         self.central_peak_amplitude = 1.0
-        self.num_rings = 3
+        self.num_rings = 2
         self.ring_radii = np.linspace(30, 90, self.num_rings)
         self.min_peaks_per_ring = 2
-        self.max_peaks_per_ring = 8
-        self.peak_amplitude_range = (0.3, 0.9)
+        self.max_peaks_per_ring = 5
+        self.peak_amplitude_range = (0.1, 1)
 
     def add_poisson_noise(self):
         """
@@ -115,10 +115,10 @@ class DiffractionPatternSimulator:
 
 
 simulator = DiffractionPatternSimulator()
-simulator.central_peak_amplitude = 10.0  # Increase the amplitude of the central peak
+simulator.central_peak_amplitude = 6.0  # Increase the amplitude of the central peak
 simulator.generate_pattern()
 simulator.add_gaussian_background()
-simulator.add_gaussian_noise(mean=0, std=0.2)  # Add Gaussian noise, uncomment to use
+simulator.add_gaussian_noise(mean=0, std=0.05)  # Add Gaussian noise, uncomment to use
 
 simulator.display_image()
 simulator.visualize_voigt_profile()
