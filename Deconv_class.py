@@ -129,8 +129,8 @@ class RichardsonLucy:
         elapsed_time = end_time - start_time
         print(f'Deconvolution took: {elapsed_time} seconds')
         # Normalize to 0-1 and then scale to original range
-        img_dec = (img_dec - img_dec.min()) / (img_dec.max() - img_dec.min())
-        img_dec = (img_dec * cp.max(image)).astype(image.dtype)
+        #img_dec = (img_dec - img_dec.min()) / (img_dec.max() - img_dec.min())
+        #img_dec = (img_dec * cp.max(image)).astype(image.dtype)
 
         # Display the deconvolved image
         if self.display == 1:
@@ -184,7 +184,8 @@ class RichardsonLucy:
             ratio = image / (den + 1e-6)  # Add small constant to avoid division by zero
             temp = convolve_func(ratio, cp.rot90(psf, 2), mode='reflect')
             img_dec *= temp*(1/(2-lambda_reg*laplacian_image+1e-6))
-            img_dec = (img_dec/cp.sum(img_dec))*cp.sum(image)
+            img_dec = cp.clip(img_dec, 0, cp.max(image))
+            #img_dec = (img_dec/cp.sum(img_dec))*cp.sum(image)
             #print(f"Iteration {i + 1}, Mean Intensity: {img_dec.mean()}")
 
         end_time = time.time()
