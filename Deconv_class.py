@@ -10,7 +10,7 @@ from skimage.color import rgb2ycbcr, ycbcr2rgb
 
 class RichardsonLucy:
     """
-    tohle je test jestli všechno jede jak má
+    tohle je test jestli všechno jede jak má 2.0
     """
 
     def __init__(self, iterations=30, cuda=True, display=False):
@@ -129,7 +129,7 @@ class RichardsonLucy:
         elapsed_time = end_time - start_time
         print(f'Deconvolution took: {elapsed_time} seconds')
         # Normalize to 0-1 and then scale to original range
-        #img_dec = (img_dec - img_dec.min()) / (img_dec.max() - img_dec.min())
+        img_dec = (img_dec - img_dec.min()) / (img_dec.max() - img_dec.min())
         #img_dec = (img_dec * cp.max(image)).astype(image.dtype)
 
         # Display the deconvolved image

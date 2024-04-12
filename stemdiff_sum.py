@@ -6,9 +6,9 @@ import os
 import cupy as cp
 #test jestli všechno šlape jak má
 
-img_path = r"C:\Users\drend\Desktop\VU\1_AU\1_AU\DATA"
-df_path = r"C:\Users\drend\Desktop\VU\1_AU\1_AU\DATA\resultsdbase_sum.zip"
-psf = np.load(r"C:\Users\drend\Desktop\VU\1_AU\1_AU\DATA\resultspsf.npy")
+img_path = r"C:\Users\drend\OneDrive\Plocha\VU\1_AU\1_AU\DATA"
+df_path = r"C:\Users\drend\OneDrive\Plocha\VU\1_AU\1_AU\DATA\resultsdbase_sum.zip"
+psf = np.load(r"C:\Users\drend\OneDrive\Plocha\VU\1_AU\1_AU\DATA\resultspsf.npy")
 
 print(psf.shape)
 df = dbase.read_database(df_path)
@@ -22,9 +22,11 @@ for files in filenames:
     filepath = os.path.join(img_path, str(files))
     data = np.fromfile(filepath, dtype='uint16').reshape((256,256))
     data = data.astype(np.float32)
+
     deconvolved = deconv.deconvRL(data, psf)
     sum_deconvolved += deconvolved
 
-plt.imshow(sum_deconvolved.get(), cmap='viridis', vmax=20000)
+
+plt.imshow(sum_deconvolved.get(), cmap='viridis', vmax=2)
 plt.show()
 
