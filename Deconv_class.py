@@ -73,130 +73,57 @@ class RichardsonLucy:
         return laplacian_filter
 
     def deconvRL(self, image, psf):
-        """
-        DeconvRL Method Documentation:
 
-        :param image: The input image to be deconvolved.
-        :param psf: The point spread function (PSF) used for deconvolution.
-        :return: The deconvolved image.
-
-        The deconvRL method performs a Richardson-Lucy deconvolution on the input image using the given PSF.
-        If the "cuda" flag is set to True, the method utilizes GPU acceleration using the CuPy library for faster computation.
-        Otherwise, it uses the NumPy library.
-
-        The PSF is normalized by dividing it by the sum of its elements to ensure its total intensity is equal to 1.
-
-        The deconvolution algorithm iterates over a specified number of iterations.
-        In each iteration, it performs the following steps:
-        1. Convolve the current deconvolved image with the PSF using the convolve_func function.
-        2. Calculate the ratio between the input image and the convolution result, adding a small constant to avoid division by zero.
-        3. Convolve the ratio with the rotated PSF using the convolve_func function.
-        4. Multiply the current deconvolved image by the convolved ratio.
-        5. Clip the values of the deconvolved image to maintain stability and prevent negative values.
-        6. Normalize the deconvolved image to the range 0-1 and then scale it to match the original image range.
-
-        After the deconvolution process is completed, the deconvolved image can be optionally displayed using the display_image method,
-        if the "display" flag is set to 1.
-
-        Finally, the deconvolved image is returned.
-
-        Example usage:
-
-        image = ...
-        psf = ...
-        deconvolved_image = deconvRL(image, psf)
-        """
         if self.cuda:
-            image = cp.asarray(image)
-            psf = cp.asarray(psf)
+            print('CUDA is available and in use.')
+            I = cp.asarray(image)
+            O_k = cp.asarray(image)
+            P = cp.asarray(psf)/cp.sum(psf)
             convolve_func = convolve
         else:
             convolve_func = np_convolve
 
-        psf = psf / cp.sum(psf)  # Normalize PSF
-        img_dec = cp.copy(image)
-        start_time = time.time()
-        for i in range(self.iterations):
-            den = convolve_func(img_dec, psf, mode='reflect')
-            ratio = image / (den + 1e-6)  # Add small constant to avoid division by zero
-            temp = convolve_func(ratio, cp.rot90(psf, 2), mode='reflect')
-            img_dec *= temp
-            # Clip values to maintain stability and prevent negative values
-            img_dec = cp.clip(img_dec, 0, cp.max(image))
-            #print(f"Iteration {i + 1}, Mean Intensity: {img_dec.mean()}")
+        for i in range(1, self.iterations):
+            ratio = I / convolve_func(O_k, P, mode='reflect')
+            O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
 
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        print(f'Deconvolution took: {elapsed_time} seconds')
-        # Normalize to 0-1 and then scale to original range
-        img_dec = (img_dec - img_dec.min()) / (img_dec.max() - img_dec.min())
-        #img_dec = (img_dec * cp.max(image)).astype(image.dtype)
+        O_k = (O_k.get() * 255).astype(np.uint8)
 
-        # Display the deconvolved image
-        if self.display == 1:
-            self.display_image(img_dec, f'Result for {self.iterations} iterations')
+        if self.display:
+            plt.imshow(O_k, cmap='gray')
+            plt.show()
 
-        return img_dec
+        return O_k
+
 
     def deconvRLTM(self, image, psf, lambda_reg):
-        """
-        :param image: Input image to be deconvolved.
-        :param psf: Point spread function.
-        :param lambda_reg: Regularization parameter for deconvolution.
-        :return: Deconvolved image.
-
-        This method performs Richardson-Lucy Tikhonov (RLTM) deconvolution on an input image using a given point spread function and regularization parameter. The deconvolution process
-        * iteratively estimates the original image by correcting the blurring effects caused by the PSF.
-
-        The method accepts the following parameters:
-        - image: Numpy array representing the input image.
-        - psf: Numpy array representing the point spread function.
-        - lambda_reg: Regularization parameter for controlling the trade-off between resolution and noise amplification in the deconvolution process.
-
-        The method returns the deconvolved image as a Numpy array.
-
-        Example Usage:
-        ```
-        image = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-        psf = np.array([[0.1, 0.1, 0.1], [0.1, 0.5, 0.1], [0.1, 0.1, 0.1]])
-        lambda_reg = 0.1
-
-        result = deconvRLTM(image, psf, lambda_reg)
-        ```
-
-        """
+        laplacian = self.fspecial_laplacian(0.33)
         if self.cuda:
-            image = cp.asarray(image)
-            psf = cp.asarray(psf)
+            print('CUDA is available and in use.')
+            I = cp.asarray(image)
+            O_k = cp.asarray(image)
+            P = cp.asarray(psf)/cp.sum(psf)
+            laplacian = cp.asarray(laplacian)
             convolve_func = convolve
         else:
             convolve_func = np_convolve
 
-        psf = psf / cp.sum(psf)  # Normalize PSF
-        img_dec = cp.copy(image)
-        start_time = time.time()
 
-        laplacian_filter = self.fspecial_laplacian(0.00001)
+        for i in range(1, self.iterations):
+            ratio = I / convolve_func(O_k, P, mode='reflect')
+            O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
+            laplacian_image = convolve_func(O_k, laplacian, mode='reflect')
+            regularization_term = 1/(1+2*lambda_reg*laplacian_image)
+            O_k = O_k * regularization_term
+            O_k = cp.clip(O_k, 0, 1)
 
-        for i in range(self.iterations):
-            laplacian_image = convolve_func(img_dec, laplacian_filter, mode='reflect')
-            den = convolve_func(img_dec, psf, mode='reflect')
-            ratio = image / (den + 1e-6)  # Add small constant to avoid division by zero
-            temp = convolve_func(ratio, cp.rot90(psf, 2), mode='reflect')
-            img_dec *= temp*(1/(2-lambda_reg*laplacian_image+1e-6))
-            img_dec = cp.clip(img_dec, 0, cp.max(image))
-            #img_dec = (img_dec/cp.sum(img_dec))*cp.sum(image)
-            #print(f"Iteration {i + 1}, Mean Intensity: {img_dec.mean()}")
+        O_k = (O_k.get() * 255).astype(np.uint8)
 
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        print(f'Deconvolution took: {elapsed_time} seconds for {self.iterations} iterations')
+        if self.display:
+            plt.imshow(O_k, cmap='gray')
+            plt.show()
 
-        # Display the deconvolved image
-        if self.display == 1:
-            self.display_image(img_dec, f'Result for {self.iterations} iterations, lambda_TM = {lambda_reg}')
-
-        return img_dec
+        return O_k
 
 
 
