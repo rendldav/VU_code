@@ -98,7 +98,7 @@ class RichardsonLucy:
 
     def deconvRLTM(self, image, psf, lambda_reg):
         laplacian = self.fspecial_laplacian(0.33)
-        #test
+        #tes
         if self.cuda:
             print('CUDA is available and in use.')
             I = cp.asarray(image)
