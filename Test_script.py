@@ -7,7 +7,7 @@ import cv2
 blurer = ImageBlurring()
 deblurer = RichardsonLucy(500, True, display=True)
 lena = blurer.load_image(r"C:\Users\drend\Desktop\VU\Lena.png")
-
+#test2
 img, kernel = blurer.motion_blur(lena, 180, 0)
 img_write = (img*255).astype(np.uint8)
 cv2.imwrite("Lena_Blurred.png", img_write)
