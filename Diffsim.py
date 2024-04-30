@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import voigt_profile
 
-
+plt.rcParams['figure.dpi'] = 500
 class DiffractionPatternSimulator:
     def __init__(self, image_size=256):
         self.image_size = image_size
@@ -12,9 +12,9 @@ class DiffractionPatternSimulator:
         self.psf_gamma = 1
         self.central_peak_amplitude = 1.0
         self.num_rings = 2
-        self.ring_radii = np.linspace(30, 90, self.num_rings)
-        self.min_peaks_per_ring = 2
-        self.max_peaks_per_ring = 5
+        self.ring_radii = np.linspace(20, 50, self.num_rings)
+        self.min_peaks_per_ring = 1
+        self.max_peaks_per_ring = 6
         self.peak_amplitude_range = (0.1, 1)
 
     def add_poisson_noise(self):
@@ -87,7 +87,7 @@ class DiffractionPatternSimulator:
         """
         Add random Voigt peaks on rings.
         """
-
+        #np.random.seed(42)
         for radius in self.ring_radii:
             num_peaks = np.random.randint(self.min_peaks_per_ring, self.max_peaks_per_ring + 1)
             angles = np.random.uniform(0, 2 * np.pi, num_peaks)
@@ -103,6 +103,9 @@ class DiffractionPatternSimulator:
         """
         self.add_central_peak()
         self.add_rings()
+        plt.imshow(self.image, vmax=1)
+        plt.show()
+
 
     def display_image(self):
         """
@@ -113,12 +116,39 @@ class DiffractionPatternSimulator:
         plt.title("Synthetic Diffraction Pattern with Voigt Peaks")
         plt.show()
 
+    def generate_peak_mask(self, exclude_central=True, threshold=0.01, exclusion_radius=5):
+        """
+        Generate a binary mask where smaller peaks are located, excluding the central peak.
+        :param exclude_central: Bool, whether to exclude the central peak from the mask.
+        :param threshold: The intensity threshold above which a pixel is considered part of a peak.
+        :param exclusion_radius: Radius around the central peak to exclude from the mask.
+        """
+        mask = self.image > threshold
+        if exclude_central:
+            center = self.image_size // 2
+            for i in range(self.image_size):
+                for j in range(self.image_size):
+                    if np.sqrt((i - center) ** 2 + (j - center) ** 2) < exclusion_radius:
+                        mask[i, j] = False
+        return mask
+
+    def display_mask(self, mask):
+        """
+        Display the binary mask.
+        """
+        plt.imshow(mask, cmap='gray')
+        plt.colorbar()
+        plt.title("Binary Mask of Smaller Peaks")
+        plt.show()
+
 
 simulator = DiffractionPatternSimulator()
-simulator.central_peak_amplitude = 6.0  # Increase the amplitude of the central peak
+simulator.central_peak_amplitude = 6.0
 simulator.generate_pattern()
+mask = simulator.generate_peak_mask(threshold=0.1, exclusion_radius=12)
 simulator.add_gaussian_background()
-simulator.add_gaussian_noise(mean=0, std=0.05)  # Add Gaussian noise, uncomment to use
+simulator.add_gaussian_noise(mean=0, std=0.25)
+
 
 simulator.display_image()
-simulator.visualize_voigt_profile()
+simulator.display_mask(mask)

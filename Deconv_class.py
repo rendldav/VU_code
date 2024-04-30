@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from cupyx.scipy.ndimage import convolve
 from scipy.ndimage import convolve as np_convolve
 import time
+from tqdm import tqdm
 import cv2
 from scipy.signal import convolve2d
 from skimage.color import rgb2ycbcr, ycbcr2rgb
@@ -83,7 +84,7 @@ class RichardsonLucy:
         else:
             convolve_func = np_convolve
 
-        for i in range(1, self.iterations):
+        for i in tqdm(range(1, self.iterations)):
             ratio = I / convolve_func(O_k, P, mode='reflect')
             O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
 
@@ -97,21 +98,25 @@ class RichardsonLucy:
 
 
     def deconvRLTM(self, image, psf, lambda_reg):
-        laplacian = self.fspecial_laplacian(0.33)
-        #tes
         if self.cuda:
             print('CUDA is available and in use.')
+            laplacian = cp.array([[0, -1, 0],
+                                  [-1, 4, -1],
+                                  [0, -1, 0]], dtype=np.float32)
             I = cp.asarray(image)
             O_k = cp.asarray(image)
             P = cp.asarray(psf)/cp.sum(psf)
             laplacian = cp.asarray(laplacian)
             convolve_func = convolve
         else:
+            laplacian = np.array([[0, -1, 0],
+                                  [-1, 4, -1],
+                                  [0, -1, 0]], dtype=np.float32)
             convolve_func = np_convolve
 
 
-        for i in range(1, self.iterations):
-            ratio = I / convolve_func(O_k, P, mode='reflect')
+        for i in tqdm(range(1, self.iterations)):
+            ratio = I / (convolve_func(O_k, P, mode='reflect') + 1e-6)
             O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
             laplacian_image = convolve_func(O_k, laplacian, mode='reflect')
             regularization_term = 1/(1+2*lambda_reg*laplacian_image)
