@@ -5,21 +5,26 @@ from cupyx.scipy.ndimage import convolve
 from scipy.ndimage import convolve as np_convolve
 import time
 from tqdm import tqdm
-import cv2
-from scipy.signal import convolve2d
-from skimage.color import rgb2ycbcr, ycbcr2rgb
+
 
 class RichardsonLucy:
     """
-    tohle je test jestli všechno jede jak má 2.0
-    """
+    This class implements the Richardson-Lucy algorithm for image deconvolution.
 
-    def __init__(self, iterations=30, cuda=True, display=False):
+    Attributes:
+        iterations (int): The number of iterations for the algorithm. Default is 30.
+        cuda (bool): Determines whether to use CUDA for computation. Default is True.
+        display (bool): Determines whether to display the deconvolved image. Default is False.
+
+    """
+    def __init__(self, iterations=30, cuda=True, display=False, timer=True, turn_off_progress_bar=True):
         if not isinstance(iterations, int) or iterations < 1:
             raise ValueError("iterations should be a positive integer.")
         self.iterations = iterations
         self.cuda = cuda
         self.display = display
+        self.timer = timer
+        self.progress_bar = turn_off_progress_bar
 
     def display_image(self, image, title):
         """
@@ -38,7 +43,7 @@ class RichardsonLucy:
 
     def fspecial_laplacian(self, alpha=0.2):
         """
-        Creates a Laplacian filter based on the specified alpha value.
+        Creates a Laplacian filter based on the specified alpha value. Simulates Matlabs behavior
 
         :param alpha: A float value between 0 and 1 representing the strength of the Laplacian filter.
         :return: A Laplacian filter matrix.
@@ -69,24 +74,46 @@ class RichardsonLucy:
 
             laplacian_filter = (alpha / (alpha + 1)) * laplacian_8 + (1 / (alpha + 1)) * laplacian_4
 
-        #print(laplacian_filter)
-
         return laplacian_filter
 
     def deconvRL(self, image, psf):
+        """
+        Perform Richardson-Lucy deconvolution on an image using a given point spread function (PSF).
 
+        :param image: The input image to be deconvolved.
+        :param psf: The point spread function.
+        :return: The deconvolved image.
+
+        This method applies the Richardson-Lucy algorithm to deconvolve an image using the given PSF. The algorithm
+        iteratively updates an estimate of the true image by dividing the observed image by the convolved estimate and
+        then multiplying the result by the flipped PSF.
+
+        If the CUDA flag is set to True, the method uses the CuPy library to perform the calculations on a GPU.
+        Otherwise, it uses the NumPy library for calculations on a CPU. The PSF is normalized before convolution.
+
+        The algorithm performs a specified number of iterations specified by the 'iterations' property of the object.
+        After each iteration, the estimated image is updated and stored in the variable 'O_k'. The resulting
+        deconvolved image is converted to an 8-bit grayscale image before being returned.
+        """
         if self.cuda:
-            print('CUDA is available and in use.')
             I = cp.asarray(image)
             O_k = cp.asarray(image)
             P = cp.asarray(psf)/cp.sum(psf)
             convolve_func = convolve
         else:
+            I = np.asarray(image)
+            O_k = np.asarray(image)
+            P = np.asarray(psf)/cp.sum(psf)
             convolve_func = np_convolve
 
-        for i in tqdm(range(1, self.iterations)):
+        start_time = time.time()
+        for i in tqdm(range(1, self.iterations), disable=self.progress_bar):
             ratio = I / convolve_func(O_k, P, mode='reflect')
             O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
+
+        end_time = time.time()
+        if self.timer:
+            print(f'Deconvolution took {end_time - start_time} seconds for {self.iterations} iterations.')
 
         O_k = (O_k.get() * 255).astype(np.uint8)
 
@@ -98,8 +125,20 @@ class RichardsonLucy:
 
 
     def deconvRLTM(self, image, psf, lambda_reg):
+        """
+        :param image: The input image to be deconvolved.
+        :param psf: The point spread function (PSF) used for convolution.
+        :param lambda_reg: The regularization parameter.
+        :return: The deconvolved image.
+
+        This method performs Richardson-Lucy with Tikhonov-Miller regularization (RLTM) deconvolution on the input image
+        using the provided PSF and regularization parameter. The deconvolution process iteratively updates the estimated
+        image by computing the ratio between the input image and the convolution of the estimated image with the PSF,
+        and then updates the estimated image by multiplying it with the ratio convolved with the rotated PSF.
+        The process is repeated for a given number of iterations. The final deconvolved image is returned. If the 'cuda'
+        flag is set to True, CUDA-accelerated functions are used; otherwise, regular NumPy functions are used.
+        """
         if self.cuda:
-            print('CUDA is available and in use.')
             laplacian = cp.array([[0, 1, 0],
                                   [1, -4, 1],
                                   [0, 1, 0]], dtype=np.float32)
@@ -118,14 +157,17 @@ class RichardsonLucy:
             laplacian = np.asarray(laplacian)
             convolve_func = np_convolve
 
-
-        for i in tqdm(range(1, self.iterations)):
+        start_time = time.time()
+        for i in tqdm(range(1, self.iterations), disable=self.progress_bar):
             ratio = I / (convolve_func(O_k, P, mode='reflect') + 1e-6)
             O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
             laplacian_image = convolve_func(O_k, laplacian, mode='reflect')
             regularization_term = 1/(1-2*lambda_reg*laplacian_image)
             O_k = O_k * regularization_term
-            O_k = cp.clip(O_k, 0, 1)
+
+        end_time = time.time()
+        if self.timer:
+            print(f'Deconvolution took {end_time - start_time} seconds for {self.iterations} iterations.')
 
         O_k = (O_k.get() * 255).astype(np.uint8)
 
@@ -155,6 +197,22 @@ class RichardsonLucy:
             raise ValueError("Only q=1 is implemented.")
 
     def compute_prior(self, O_k, P):
+        """
+        :param O_k: The input image array of shape (height, width)
+        :param P: Dictionary containing a function 'fh' for calculating the differences
+        :return: The regularization element of shape (height, width)
+
+        This function computes the regularization element for an input image.
+        The regularization element is calculated by first computing the vertical and horizontal differences between
+        adjacent pixels. These differences are then passed through the function 'fh' specified in the dictionary P.
+        The resulting values are used to create an array L of shape (height, width, 1, 5).
+        The first four dimensions of L represent the vertical and horizontal differences, and the last dimension
+        represents their sum. Circular shifts are applied to the input image O_k, and a singleton third dimension is
+        added. These shifted images are concatenated along the fourth dimension to match the behavior of MATLAB's 'cat'
+        function. The element-wise multiplication of L and the concatenated shifted images is performed, followed by
+        the sum along the fourth dimension. The resulting array is then squeezed to remove any singleton dimensions,
+        and it is returned as the regularization element.
+        """
         usize = list(O_k.shape)  # Extract the size of the image
         usize.append(1)  # Add a singleton third dimension
         L = np.zeros(usize + [5])  # Shape: (height, width, 1, 5)
@@ -182,8 +240,6 @@ class RichardsonLucy:
 
         # Concatenate shifts along the fourth dimension to match MATLAB's `cat(4, ...)` behavior
         img_dec_cat = np.concatenate([img_dec_shifted_1, img_dec_shifted_2, img_dec_shifted_3, img_dec_shifted_4, O_k_singleton], axis=2)
-
-        # Add a final dimension to `img_dec_cat` for compatibility with `L`
         img_dec_cat = img_dec_cat[:, :, np.newaxis, :]
         # Calculate the regularization element
         reg = np.sum(L * img_dec_cat, axis=-1)
@@ -192,8 +248,21 @@ class RichardsonLucy:
         return reg
 
     def deconvRLTV(self, image, psf, lambda_reg):
+        """
+        :param image: The input image for deconvolution.
+        :param psf: The point spread function (PSF) for convolution.
+        :param lambda_reg: The regularization parameter for the deconvolution algorithm.
+        :return: The deconvolved image.
+
+        This method performs regularized deconvolution using the Richardson-Lucy Total Variation (RLTV) algorithm.
+        The algorithm improves the quality of an image that has been blurred by a known PSF.
+        If CUDA is available and in use, the method utilizes GPU acceleration. Otherwise, it runs on the CPU.
+        The PSF is normalized to ensure that its sum is equal to 1.
+        The regularization term is computed using the self.compute_prior() method by applying the total variation
+        regularization parameter lambda_reg to the current deconvolved image O_k.
+        The algorithm iteratively updates the deconvolved image O_k using the ratio of the input image I"""
+
         if self.cuda:
-            print('CUDA is available and in use.')
             I = cp.asarray(image)
             O_k = cp.asarray(image)
             P = cp.asarray(psf) / cp.sum(psf)
@@ -205,9 +274,8 @@ class RichardsonLucy:
             convolve_func = np_convolve
 
         P_h = self.msetupLnormPrior(1, lambda_reg, 100*lambda_reg)
-
-
-        for i in tqdm(range(1, self.iterations)):
+        start_time = time.time()
+        for i in tqdm(range(1, self.iterations), disable=self.progress_bar):
             reg = self.compute_prior(O_k.get(), P_h)
             reg = cp.asarray(reg)
             ratio = I / (convolve_func(O_k, P, mode='reflect') + 1e-6)
@@ -216,6 +284,9 @@ class RichardsonLucy:
             O_k = O_k * regularization_term
             O_k = cp.clip(O_k, 0, 1)
 
+        end_time = time.time()
+        if self.timer:
+            print(f'Deconvolution took {end_time - start_time} seconds for {self.iterations} iterations.')
         O_k = (O_k.get() * 255).astype(np.uint8)
 
         if self.display:
