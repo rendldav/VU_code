@@ -4,8 +4,8 @@ from Deconv_class import RichardsonLucy
 import cv2
 
 blurer = ImageBlurring()
-deblurer = RichardsonLucy(1000, True, display=True)
+deblurer = RichardsonLucy(800, True, display=True, turn_off_progress_bar=False)
 lena = blurer.load_image(r"C:\Users\drend\OneDrive\Plocha\VU\Lena.png")
 #test2
-img, kernel = blurer.motion_blur(lena, 35, 3)
-deblurred_img = deblurer.deconvRL(img, kernel)
+img, kernel = blurer.gaussian_blur(lena, [15,15], 5)
+deblurred_img = deblurer.deconvRLTV(img, kernel, 0.03)
