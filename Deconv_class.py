@@ -17,7 +17,7 @@ class RichardsonLucy:
         display (bool): Determines whether to display the deconvolved image. Default is False.
 
     """
-    def __init__(self, iterations=30, cuda=True, display=False, timer=True, turn_off_progress_bar=True):
+    def __init__(self, iterations=30, cuda=True, display=False, timer=False, turn_off_progress_bar=True):
         if not isinstance(iterations, int) or iterations < 1:
             raise ValueError("iterations should be a positive integer.")
         self.iterations = iterations
@@ -76,7 +76,7 @@ class RichardsonLucy:
 
         return laplacian_filter
 
-    def deconvRL(self, image, psf):
+    def deconvRL(self, I, P):
         """
         Perform Richardson-Lucy deconvolution on an image using a given point spread function (PSF).
 
@@ -96,27 +96,36 @@ class RichardsonLucy:
         deconvolved image is converted to an 8-bit grayscale image before being returned.
         """
         if self.cuda:
-            I = cp.asarray(image)
-            O_k = cp.asarray(image)
-            P = cp.asarray(psf)/cp.sum(psf)
+            I = cp.asarray(I)
+            I = (I-I.min()) / (I.max()-I.min())
+            I = I.astype(cp.float64)
+            O_k = cp.asarray(I)
+            P = cp.asarray(P)/cp.sum(P)
             convolve_func = convolve
         else:
-            I = np.asarray(image)
-            O_k = np.asarray(image)
-            P = np.asarray(psf)/cp.sum(psf)
+            I = np.asarray(I)
+            I = (I-I.min()) / (I.max()-I.min())
+            I = I.astype(np.float64)
+            O_k = np.asarray(I)
+            P = np.asarray(P)/cp.sum(P)
             convolve_func = np_convolve
 
         start_time = time.time()
+        norm = cp.sum(I)
         for i in tqdm(range(1, self.iterations), disable=self.progress_bar):
             ratio = I / convolve_func(O_k, P, mode='reflect')
             O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
+            O_k = O_k/cp.sum(O_k) * norm
+            O_k = cp.clip(O_k, 0, 1)
 
         end_time = time.time()
         if self.timer:
             print(f'Deconvolution took {end_time - start_time} seconds for {self.iterations} iterations.')
+        if self.cuda:
+            O_k = (O_k.get()*255).astype(np.uint8)
 
-        O_k = (O_k.get() * 255).astype(np.uint8)
-
+        else:
+            O_k = (O_k * 255).astype(np.uint8)
         if self.display:
             plt.imshow(O_k, cmap='gray')
             plt.show()
@@ -124,7 +133,7 @@ class RichardsonLucy:
         return O_k
 
 
-    def deconvRLTM(self, image, psf, lambda_reg):
+    def deconvRLTM(self, I, P, lambda_reg):
         """
         :param image: The input image to be deconvolved.
         :param psf: The point spread function (PSF) used for convolution.
@@ -139,37 +148,45 @@ class RichardsonLucy:
         flag is set to True, CUDA-accelerated functions are used; otherwise, regular NumPy functions are used.
         """
         if self.cuda:
-            laplacian = cp.array([[0, 1, 0],
-                                  [1, -4, 1],
-                                  [0, 1, 0]], dtype=np.float32)
-            I = cp.asarray(image)
-            O_k = cp.asarray(image)
-            P = cp.asarray(psf)/cp.sum(psf)
-            laplacian = cp.asarray(laplacian)
-            convolve_func = convolve
-        else:
-            laplacian = np.array([[0, -1, 0],
-                                  [-1, 4, -1],
-                                  [0, -1, 0]], dtype=np.float32)
-            I = np.asarray(image)
-            O_k = np.asarray(image)
-            P = np.asarray(psf)/cp.sum(psf)
-            laplacian = np.asarray(laplacian)
-            convolve_func = np_convolve
+            if self.cuda:
+                I = cp.asarray(I)
+                I = (I - I.min()) / (I.max() - I.min())
+                I = I.astype(cp.float64)
+                O_k = cp.asarray(I)
+                P = cp.asarray(P) / cp.sum(P)
+                convolve_func = convolve
+                laplacian = cp.array([[0, 1, 0],
+                                      [1, -4, 1],
+                                      [0, 1, 0]], dtype=np.float32)
+            else:
+                I = np.asarray(I)
+                I = (I - I.min()) / (I.max() - I.min())
+                I = I.astype(np.float64)
+                O_k = np.asarray(I)
+                P = np.asarray(P) / cp.sum(P)
+                convolve_func = np_convolve
+                laplacian = np.array([[0, 1, 0],
+                                      [1, -4, 1],
+                                      [0, 1, 0]], dtype=np.float32)
 
         start_time = time.time()
+        norm = cp.sum(I)
         for i in tqdm(range(1, self.iterations), disable=self.progress_bar):
             ratio = I / (convolve_func(O_k, P, mode='reflect') + 1e-6)
             O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
             laplacian_image = convolve_func(O_k, laplacian, mode='reflect')
             regularization_term = 1/(1-2*lambda_reg*laplacian_image)
             O_k = O_k * regularization_term
+            O_k = O_k/cp.sum(O_k) * norm
+            O_k = cp.clip(O_k, 0, 1)
 
         end_time = time.time()
         if self.timer:
             print(f'Deconvolution took {end_time - start_time} seconds for {self.iterations} iterations.')
-
-        O_k = (O_k.get() * 255).astype(np.uint8)
+        if self.cuda:
+            O_k = (O_k.get() * 255).astype(np.uint8)
+        else:
+            O_k = (O_k * 255).astype(np.uint8)
 
         if self.display:
             plt.imshow(O_k, cmap='gray')
@@ -247,7 +264,7 @@ class RichardsonLucy:
 
         return reg
 
-    def deconvRLTV(self, image, psf, lambda_reg):
+    def deconvRLTV(self, I, P, lambda_reg):
         """
         :param image: The input image for deconvolution.
         :param psf: The point spread function (PSF) for convolution.
@@ -263,21 +280,28 @@ class RichardsonLucy:
         The algorithm iteratively updates the deconvolved image O_k using the ratio of the input image I"""
 
         if self.cuda:
-            I = cp.asarray(image)
-            O_k = cp.asarray(image)
-            P = cp.asarray(psf) / cp.sum(psf)
+            I = cp.asarray(I)
+            I = (I-I.min()) / (I.max()-I.min())
+            I = I.astype(cp.float64)
+            O_k = cp.asarray(I)
+            P = cp.asarray(P)/cp.sum(P)
             convolve_func = convolve
         else:
-            I = np.asarray(image)
-            O_k = np.asarray(image)
-            P = np.asarray(psf) / np.sum(psf)
+            I = np.asarray(I)
+            I = (I-I.min()) / (I.max()-I.min())
+            I = I.astype(np.float64)
+            O_k = np.asarray(I)
+            P = np.asarray(P)/cp.sum(P)
             convolve_func = np_convolve
 
         P_h = self.msetupLnormPrior(1, lambda_reg, 100*lambda_reg)
         start_time = time.time()
         for i in tqdm(range(1, self.iterations), disable=self.progress_bar):
-            reg = self.compute_prior(O_k.get(), P_h)
-            reg = cp.asarray(reg)
+            if self.cuda:
+                reg = self.compute_prior(O_k.get(), P_h)
+                reg = cp.asarray(reg)
+            else:
+                reg = self.compute_prior(O_k, P_h)
             ratio = I / (convolve_func(O_k, P, mode='reflect') + 1e-6)
             O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
             regularization_term = 1/(1-lambda_reg * reg)
