@@ -25,6 +25,8 @@ class RichardsonLucy:
         self.display = display
         self.timer = timer
         self.progress_bar = turn_off_progress_bar
+        cp.get_default_memory_pool().free_all_blocks()
+        cp.get_default_pinned_memory_pool().free_all_blocks()
 
     def display_image(self, image, title):
         """
@@ -97,6 +99,7 @@ class RichardsonLucy:
         """
         if self.cuda:
             I = cp.asarray(I)
+
             I = (I-I.min()) / (I.max()-I.min())
             I = I.astype(cp.float64)
             O_k = cp.asarray(I)
@@ -115,8 +118,8 @@ class RichardsonLucy:
         for i in tqdm(range(1, self.iterations), disable=self.progress_bar):
             ratio = I / convolve_func(O_k, P, mode='reflect')
             O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
-            O_k = O_k/cp.sum(O_k) * norm
-            O_k = cp.clip(O_k, 0, 1)
+        O_k = O_k / cp.sum(O_k) * norm
+
 
         end_time = time.time()
         if self.timer:
@@ -177,8 +180,7 @@ class RichardsonLucy:
             laplacian_image = convolve_func(O_k, laplacian, mode='reflect')
             regularization_term = 1/(1-2*lambda_reg*laplacian_image)
             O_k = O_k * regularization_term
-            O_k = O_k/cp.sum(O_k) * norm
-            O_k = cp.clip(O_k, 0, 1)
+        O_k = O_k/cp.sum(O_k) * norm
 
         end_time = time.time()
         if self.timer:
@@ -296,6 +298,7 @@ class RichardsonLucy:
 
         P_h = self.msetupLnormPrior(1, lambda_reg, 100*lambda_reg)
         start_time = time.time()
+        norm = cp.sum(I)
         for i in tqdm(range(1, self.iterations), disable=self.progress_bar):
             if self.cuda:
                 reg = self.compute_prior(O_k.get(), P_h)
@@ -306,7 +309,8 @@ class RichardsonLucy:
             O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
             regularization_term = 1/(1-lambda_reg * reg)
             O_k = O_k * regularization_term
-            O_k = cp.clip(O_k, 0, 1)
+        O_k = O_k/cp.sum(O_k) * norm
+            #O_k = cp.clip(O_k, 0, 1)
 
         end_time = time.time()
         if self.timer:

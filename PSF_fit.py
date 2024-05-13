@@ -186,13 +186,13 @@ def detect_and_extract_peak(image):
     size = image.shape[0]
     center = size // 2
     masked_image = image.copy()
-    masked_image[center - 10:center + 10, center - 10:center + 10] = 0  # Adjust the size as needed
+    masked_image[center - 25:center + 25, center - 25:center + 25] = 0  # Adjust the size as needed
 
     # Enhance other peaks
     filtered_image = filters.gaussian(masked_image, sigma=1)
 
     # Thresholding to keep higher intensities
-    thresh = filters.threshold_otsu(filtered_image)
+    thresh = 30
     binary_image = filtered_image > thresh
 
     # Step 2: Detect peaks using a blob detection method or connected components
@@ -204,6 +204,7 @@ def detect_and_extract_peak(image):
 
     for blob in blobs:
         y, x, r = blob
+        r=30
         region = image[int(y - r):int(y + r + 1), int(x - r):int(x + r + 1)]
         label_img = measure.label(region > thresh)
         regions = measure.regionprops(label_img)

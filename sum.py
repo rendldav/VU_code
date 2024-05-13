@@ -208,6 +208,6 @@ def dfile_with_deconvolution_type2(SDATA, DIFFIMAGES, datafile, iterate):
     PSF = psf.PSFtype2.get_psf(arr, psf_size, circular=True)
 
 
-    arr_deconv = RL.deconvRL(arr, PSF)
+    arr_deconv = RL.deconvRLTV(arr, PSF, 0.1)
 
     return(arr_deconv)
