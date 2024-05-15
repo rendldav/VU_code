@@ -99,7 +99,7 @@ class RichardsonLucy:
         """
         if self.cuda:
             I = cp.asarray(I)
-
+            norm = cp.max(I)
             I = (I-I.min()) / (I.max()-I.min())
             I = I.astype(cp.float64)
             O_k = cp.asarray(I)
@@ -125,10 +125,10 @@ class RichardsonLucy:
         if self.timer:
             print(f'Deconvolution took {end_time - start_time} seconds for {self.iterations} iterations.')
         if self.cuda:
-            O_k = (O_k.get()*255).astype(np.uint8)
+            O_k = (O_k.get()*(255)).astype(np.uint8)
 
         else:
-            O_k = (O_k * 255).astype(np.uint8)
+            O_k = (O_k * 255).astype(np.uint16)
         if self.display:
             plt.imshow(O_k, cmap='gray')
             plt.show()
@@ -186,9 +186,9 @@ class RichardsonLucy:
         if self.timer:
             print(f'Deconvolution took {end_time - start_time} seconds for {self.iterations} iterations.')
         if self.cuda:
-            O_k = (O_k.get() * 255).astype(np.uint8)
+            O_k = (O_k.get() * 255).astype(np.uint16)
         else:
-            O_k = (O_k * 255).astype(np.uint8)
+            O_k = (O_k * 255).astype(np.uint16)
 
         if self.display:
             plt.imshow(O_k, cmap='gray')
@@ -310,12 +310,11 @@ class RichardsonLucy:
             regularization_term = 1/(1-lambda_reg * reg)
             O_k = O_k * regularization_term
         O_k = O_k/cp.sum(O_k) * norm
-            #O_k = cp.clip(O_k, 0, 1)
 
         end_time = time.time()
         if self.timer:
             print(f'Deconvolution took {end_time - start_time} seconds for {self.iterations} iterations.')
-        O_k = (O_k.get() * 255).astype(np.uint8)
+        O_k = (O_k.get() * 255).astype(np.uint16)
 
         if self.display:
             plt.imshow(O_k, cmap='gray')

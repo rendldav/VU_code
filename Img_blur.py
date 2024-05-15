@@ -18,6 +18,7 @@ class ImageBlurring:
         kernel = cv2.getGaussianKernel(kernel_size[0], sigma_x)
         kernel = np.outer(kernel, kernel.transpose())
         blurred = cv2.filter2D(self.image, -1, kernel)
+        blurred = self.add_gaussian_noise(blurred)
 
         if save_blurred:
             cv2.imwrite(output_image_path, blurred)
@@ -53,3 +54,11 @@ class ImageBlurring:
             plt.show()
 
         return output, kernel_motion_blur
+
+    def add_gaussian_noise(self, image, mean=0, var=0.0005):
+        row, col = image.shape
+        sigma = var**0.5
+        gauss = np.random.normal(mean, sigma, (row, col))
+        gauss = gauss.reshape(row, col)
+        noisy = image + gauss
+        return noisy

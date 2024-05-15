@@ -5,6 +5,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from skimage import feature, measure, filters, morphology
 from scipy import ndimage
+import sys
+import tqdm
+import stemdiff as sd
 
 
 def voigt_2d(x, y, amp, x0, y0, sigma_g, gamma_l):
@@ -232,7 +235,41 @@ def detect_and_extract_peak(image):
 
     return peak_region
 
-# Example usage
-# data = np.array([...])  # Your PSF data as a numpy array
-# output_size = (50, 50)  # Desired size of the sampled PSF
-# sampled_psf = fit_and_sample_voigt_2d(data, output_size)
+
+def dfile_without_deconvolution(SDATA, DIFFIMAGES, datafile):
+
+    R = SDATA.detector.upscale
+    img_size = DIFFIMAGES.imgsize
+    datafile_name = SDATA.data_dir.joinpath(datafile.DatafileName)
+    arr = sd.io.Datafiles.read(SDATA, datafile_name)
+    arr = sd.io.Arrays.rescale(arr, R, order=3)
+    xc, yc = (round(datafile.Xcenter), round(datafile.Ycenter))
+    arr = sd.io.Arrays.remove_edges(arr, img_size*R, xc, yc)
+
+    return(arr)
+
+
+def average_datafiles(SDATA, DIFFIMAGES, df, deconv=0):
+    R = SDATA.detector.upscale
+    img_size = DIFFIMAGES.imgsize
+    datafiles = [datafile[1] for datafile in df.iterrows()]
+    sum_arr = np.zeros((img_size * R, img_size * R), dtype=np.float32)
+    total_tasks = len(datafiles)
+    sys.stderr = sys.stdout
+
+    with tqdm.tqdm(total=total_tasks, desc="Processing ") as pbar:
+        try:
+            for index, datafile in df.iterrows():
+                if deconv == 0:
+                    sum_arr += dfile_without_deconvolution(
+                        SDATA, DIFFIMAGES, datafile)
+                pbar.update(1)
+            sum_arr = sum_arr/len(df)
+        except Exception as e:
+            print(f"Error processing a task: {str(e)}")
+
+    print('')
+
+    return sum_arr
+
+
