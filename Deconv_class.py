@@ -28,6 +28,48 @@ class RichardsonLucy:
         cp.get_default_memory_pool().free_all_blocks()
         cp.get_default_pinned_memory_pool().free_all_blocks()
 
+    new_float_type = {
+        # preserved types
+        np.float32().dtype.char: np.float32,
+        np.float64().dtype.char: np.float64,
+        np.complex64().dtype.char: np.complex64,
+        np.complex128().dtype.char: np.complex128,
+        # altered types
+        np.float16().dtype.char: np.float32,
+        'g': np.float64,  # np.float128 ; doesn't exist on windows
+        'G': np.complex128,  # np.complex256 ; doesn't exist on windows
+    }
+
+    def _supported_float_type(self, input_dtype, allow_complex=False):
+        """Return an appropriate floating-point dtype for a given dtype.
+
+        float32, float64, complex64, complex128 are preserved.
+        float16 is promoted to float32.
+        complex256 is demoted to complex128.
+        Other types are cast to float64.
+
+        Parameters
+        ----------
+        input_dtype : np.dtype or tuple of np.dtype
+            The input dtype. If a tuple of multiple dtypes is provided, each
+            dtype is first converted to a supported floating point type and the
+            final dtype is then determined by applying `np.result_type` on the
+            sequence of supported floating point types.
+        allow_complex : bool, optional
+            If False, raise a ValueError on complex-valued inputs.
+
+        Returns
+        -------
+        float_type : dtype
+            Floating-point dtype for the image.
+        """
+        if isinstance(input_dtype, tuple):
+            return np.result_type(*(self._supported_float_type(d) for d in input_dtype))
+        input_dtype = np.dtype(input_dtype)
+        if not allow_complex and input_dtype.kind == 'c':
+            raise ValueError("complex valued input is not supported")
+        return self.new_float_type.get(input_dtype.char, np.float64)
+
     def display_image(self, image, title):
         """
             Display an image with a given title.
@@ -97,35 +139,30 @@ class RichardsonLucy:
         After each iteration, the estimated image is updated and stored in the variable 'O_k'. The resulting
         deconvolved image is converted to an 8-bit grayscale image before being returned.
         """
+        float_type = self._supported_float_type(I.dtype)
         if self.cuda:
-            I = cp.asarray(I)
-            norm = cp.max(I)
-            I = (I-I.min()) / (I.max()-I.min())
-            I = I.astype(cp.float64)
-            O_k = cp.asarray(I)
-            P = cp.asarray(P)/cp.sum(P)
+            I = cp.asarray(I, dtype=float_type)
+            O_k = cp.full(I.shape, fill_value=0.5, dtype=float_type)
+            P = cp.asarray(P)
             convolve_func = convolve
         else:
             I = np.asarray(I)
-            I = (I-I.min()) / (I.max()-I.min())
             I = I.astype(np.float64)
             O_k = np.asarray(I)
-            P = np.asarray(P)/cp.sum(P)
+            P = np.asarray(P)
             convolve_func = np_convolve
-
+        eps = 1e-12
         start_time = time.time()
-        norm = cp.sum(I)
         for i in tqdm(range(1, self.iterations), disable=self.progress_bar):
-            ratio = I / convolve_func(O_k, P, mode='reflect')
+            ratio = I / (convolve_func(O_k, P, mode='reflect') + eps)
             O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
-        O_k = O_k / cp.sum(O_k) * norm
-
-
+        O_k[O_k > 1] = 1
+        O_k[O_k < -1] = -1
         end_time = time.time()
         if self.timer:
             print(f'Deconvolution took {end_time - start_time} seconds for {self.iterations} iterations.')
         if self.cuda:
-            O_k = (O_k.get()*(255)).astype(np.uint8)
+            O_k = O_k.get()
 
         else:
             O_k = (O_k * 255).astype(np.uint16)

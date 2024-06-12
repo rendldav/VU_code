@@ -127,24 +127,28 @@ def dfile_without_deconvolution(SDATA, DIFFIMAGES, datafile):
 
 
 def dfile_with_deconvolution_type1(SDATA, DIFFIMAGES, datafile, psf, iterate, regularization=None, lambda_reg=0.05):
-
     R = SDATA.detector.upscale
     img_size = DIFFIMAGES.imgsize
-    RL = RichardsonLucy(iterations=iterate, cuda=True)
 
     datafile_name = SDATA.data_dir.joinpath(datafile.DatafileName)
     arr = stemdiff.io.Datafiles.read(SDATA, datafile_name)
     arr = stemdiff.io.Arrays.rescale(arr, R, order=3)
-    xc,yc = (round(datafile.Xcenter), round(datafile.Ycenter))
-    arr = stemdiff.io.Arrays.remove_edges(arr, img_size*R,xc,yc)        
-    if regularization==None:
-        arr_deconv = RL.deconvRL(arr, psf)
-    elif regularization == 'TM':
-        arr_deconv = RL.deconvRLTM(arr, psf, lambda_reg)
-    elif regularization == 'TV':
-        arr_deconv = RL.deconvRLTV(arr, psf, lambda_reg)
+    xc, yc = (round(datafile.Xcenter), round(datafile.Ycenter))
+    arr = stemdiff.io.Arrays.remove_edges(arr, img_size * R, xc, yc)
 
-    return arr_deconv
+    norm_const = np.max(arr)
+    arr_norm = arr / np.max(arr)
+    psf_norm = psf / np.max(psf)
+    RL = RichardsonLucy(iterations=iterate, cuda=True, timer=False, turn_off_progress_bar=True)
+    arr_deconv = RL.deconvRL(arr_norm, psf_norm)
+    #arr_deconv = restoration.richardson_lucy(
+    #    arr_norm, psf_norm, num_iter=iterate)
+
+    # (c) restore original range of intensities = re-normalize
+    arr = arr_deconv * norm_const
+
+
+    return arr
 
 
 def dfile_with_deconvolution_type2(SDATA, DIFFIMAGES, datafile, iterate):
