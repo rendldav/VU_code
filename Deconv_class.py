@@ -122,7 +122,7 @@ class RichardsonLucy:
 
     def deconvRL(self, I, P):
         """
-        Perform Richardson-Lucy deconvolution on an image using a given point spread function (PSF).
+        Perform Richardson-Lucy deconvolution on an image using a given point spread function (PSF).testing
 
         :param image: The input image to be deconvolved.
         :param psf: The point spread function.

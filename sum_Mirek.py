@@ -23,6 +23,7 @@ Key argument is deconv, which determines the processing type:
 * deconv=1 = R-L deconvolution with global PSF from low-diffraction datafiles
 * deconv=2 = subtract background + R-L deconvolution with PSF from the center
 '''
+#test
 
 
 import numpy as np
