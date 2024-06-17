@@ -6,9 +6,9 @@ import sum
 import sum_Mirek
 import ediff
 #test
-img_path = r"C:\Users\drend\OneDrive\Plocha\VU\1_AU\1_AU\DATA"
-df_path = r"C:\Users\drend\OneDrive\Plocha\VU\1_AU\1_AU\DATA\resultsdbase_sum.zip"
-psf = np.load(r"C:\Users\drend\OneDrive\Plocha\VU\1_AU\1_AU\DATA\resultspsf.npy")
+img_path = r"C:\Users\drend\Desktop\VU\1_AU\1_AU\DATA"
+df_path = r"C:\Users\drend\Desktop\VU\1_AU\1_AU\DATA\resultsdbase_sum.zip"
+psf = np.load(r"C:\Users\drend\Desktop\VU\1_AU\1_AU\DATA\resultspsf.npy")
 
 
 df_sum = dbase.read_database(df_path)
@@ -20,11 +20,11 @@ SDATA = sd.gvars.SourceData(
     filenames=r'*.dat')
 DIFFIMAGES = sd.gvars.DiffImages()
 
-sum_data_Mirek = sum_Mirek.sum_datafiles(SDATA, DIFFIMAGES, df_sum, deconv=1, psf=psf, iterate=50)
+sum_data_Mirek = sum_Mirek.sum_datafiles(SDATA, DIFFIMAGES, df_sum, deconv=1, psf=psf, iterate=10)
 sd.io.Arrays.show(sum_data_Mirek, icut=300, cmap='viridis')
-ediff.io.plot_radial_distributions(data_to_plot=[[sum_data_Mirek,'k--','10it']], xlimit=250, ylimit=130)
+ediff.io.plot_radial_distributions(data_to_plot=[[sum_data_Mirek,'k--','10it']], xlimit=250, ylimit=180)
 
-sum_data_David = sum.sum_datafiles(SDATA, DIFFIMAGES, df_sum, deconv=1, psf=psf, iterate=50)
+sum_data_David = sum.sum_datafiles(SDATA, DIFFIMAGES, df_sum, deconv=1, psf=psf, iterate=10)
 sd.io.Arrays.show(sum_data_David, icut=300, cmap='viridis')
 ediff.io.plot_radial_distributions(data_to_plot=[[sum_data_David,'k--','10it_pico']], xlimit=250, ylimit=180)
 

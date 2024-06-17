@@ -146,9 +146,8 @@ class RichardsonLucy:
             P = cp.asarray(P)
             convolve_func = convolve
         else:
-            I = np.asarray(I)
-            I = I.astype(np.float64)
-            O_k = np.asarray(I)
+            I = np.asarray(I, dtype=float_type)
+            O_k = np.full(I.shape, fill_value=0.5, dtype=float_type)
             P = np.asarray(P)
             convolve_func = np_convolve
         eps = 1e-12
@@ -163,13 +162,9 @@ class RichardsonLucy:
             print(f'Deconvolution took {end_time - start_time} seconds for {self.iterations} iterations.')
         if self.cuda:
             O_k = O_k.get()
-
-        else:
-            O_k = (O_k * 255).astype(np.uint16)
         if self.display:
             plt.imshow(O_k, cmap='gray')
             plt.show()
-
         return O_k
 
 
@@ -187,45 +182,39 @@ class RichardsonLucy:
         The process is repeated for a given number of iterations. The final deconvolved image is returned. If the 'cuda'
         flag is set to True, CUDA-accelerated functions are used; otherwise, regular NumPy functions are used.
         """
+        float_type = self._supported_float_type(I.dtype)
         if self.cuda:
-            if self.cuda:
-                I = cp.asarray(I)
-                I = (I - I.min()) / (I.max() - I.min())
-                I = I.astype(cp.float64)
-                O_k = cp.asarray(I)
-                P = cp.asarray(P) / cp.sum(P)
-                convolve_func = convolve
-                laplacian = cp.array([[0, 1, 0],
-                                      [1, -4, 1],
-                                      [0, 1, 0]], dtype=np.float32)
-            else:
-                I = np.asarray(I)
-                I = (I - I.min()) / (I.max() - I.min())
-                I = I.astype(np.float64)
-                O_k = np.asarray(I)
-                P = np.asarray(P) / cp.sum(P)
-                convolve_func = np_convolve
-                laplacian = np.array([[0, 1, 0],
-                                      [1, -4, 1],
-                                      [0, 1, 0]], dtype=np.float32)
-
+            I = cp.asarray(I, dtype=float_type)
+            O_k = cp.full(I.shape, fill_value=0.5, dtype=float_type)
+            P = cp.asarray(P)
+            convolve_func = convolve
+            laplacian = cp.array([[0, 1, 0],
+                                  [1, -4, 1],
+                                  [0, 1, 0]], dtype=float_type)
+        else:
+            I = np.asarray(I, dtype=float_type)
+            O_k = np.full(I.shape, fill_value=0.5, dtype=float_type)
+            P = np.asarray(P)
+            convolve_func = np_convolve
+            laplacian = np.array([[0, 1, 0],
+                                  [1, -4, 1],
+                                  [0, 1, 0]], dtype=float_type)
+        eps = 1e-12
         start_time = time.time()
-        norm = cp.sum(I)
         for i in tqdm(range(1, self.iterations), disable=self.progress_bar):
-            ratio = I / (convolve_func(O_k, P, mode='reflect') + 1e-6)
+            ratio = I / ((convolve_func(O_k, P, mode='reflect') + 1e-6) + eps)
             O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
             laplacian_image = convolve_func(O_k, laplacian, mode='reflect')
             regularization_term = 1/(1-2*lambda_reg*laplacian_image)
             O_k = O_k * regularization_term
-        O_k = O_k/cp.sum(O_k) * norm
+        O_k[O_k > 1] = 1
+        O_k[O_k < -1] = -1
 
         end_time = time.time()
         if self.timer:
             print(f'Deconvolution took {end_time - start_time} seconds for {self.iterations} iterations.')
         if self.cuda:
-            O_k = (O_k.get() * 255).astype(np.uint16)
-        else:
-            O_k = (O_k * 255).astype(np.uint16)
+            O_k = O_k.get()
 
         if self.display:
             plt.imshow(O_k, cmap='gray')
@@ -318,24 +307,22 @@ class RichardsonLucy:
         regularization parameter lambda_reg to the current deconvolved image O_k.
         The algorithm iteratively updates the deconvolved image O_k using the ratio of the input image I"""
 
+        float_type = self._supported_float_type(I.dtype)
         if self.cuda:
-            I = cp.asarray(I)
-            I = (I-I.min()) / (I.max()-I.min())
-            I = I.astype(cp.float64)
-            O_k = cp.asarray(I)
-            P = cp.asarray(P)/cp.sum(P)
+            I = cp.asarray(I, dtype=float_type)
+            O_k = cp.full(I.shape, fill_value=0.5, dtype=float_type)
+            P = cp.asarray(P)
             convolve_func = convolve
         else:
-            I = np.asarray(I)
-            I = (I-I.min()) / (I.max()-I.min())
-            I = I.astype(np.float64)
-            O_k = np.asarray(I)
-            P = np.asarray(P)/cp.sum(P)
+            I = np.asarray(I, dtype=float_type)
+            O_k = np.full(I.shape, fill_value=0.5, dtype=float_type)
+            P = np.asarray(P)
             convolve_func = np_convolve
+        eps = 1e-12
 
         P_h = self.msetupLnormPrior(1, lambda_reg, 100*lambda_reg)
         start_time = time.time()
-        norm = cp.sum(I)
+
         for i in tqdm(range(1, self.iterations), disable=self.progress_bar):
             if self.cuda:
                 reg = self.compute_prior(O_k.get(), P_h)
@@ -346,12 +333,14 @@ class RichardsonLucy:
             O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
             regularization_term = 1/(1-lambda_reg * reg)
             O_k = O_k * regularization_term
-        O_k = O_k/cp.sum(O_k) * norm
+        O_k[O_k > 1] = 1
+        O_k[O_k < -1] = -1
 
         end_time = time.time()
         if self.timer:
             print(f'Deconvolution took {end_time - start_time} seconds for {self.iterations} iterations.')
-        O_k = (O_k.get() * 255).astype(np.uint16)
+        if self.cuda:
+            O_k = O_k.get()
 
         if self.display:
             plt.imshow(O_k, cmap='gray')
