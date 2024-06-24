@@ -152,9 +152,10 @@ class RichardsonLucy:
             convolve_func = np_convolve
         eps = 1e-12
         start_time = time.time()
+        P_flipped = np.flip(np.flip(P, 0), 1) if not self.cuda else cp.flip(cp.flip(P, 0), 1)
         for i in tqdm(range(1, self.iterations), disable=self.progress_bar):
             ratio = I / (convolve_func(O_k, P, mode='reflect') + eps)
-            O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
+            O_k = O_k * (convolve_func(ratio, P_flipped, mode='reflect'))
         O_k[O_k > 1] = 1
         O_k[O_k < -1] = -1
         end_time = time.time()
@@ -329,7 +330,7 @@ class RichardsonLucy:
                 reg = cp.asarray(reg)
             else:
                 reg = self.compute_prior(O_k, P_h)
-            ratio = I / (convolve_func(O_k, P, mode='reflect') + 1e-6)
+            ratio = I / (convolve_func(O_k, P, mode='reflect') + eps)
             O_k = O_k * (convolve_func(ratio, cp.rot90(P, k=2), mode='reflect'))
             regularization_term = 1/(1-lambda_reg * reg)
             O_k = O_k * regularization_term
@@ -348,5 +349,40 @@ class RichardsonLucy:
 
         return O_k
 
+    def deconvRLGIG(self, I, P, a, b, p):
+
+        float_type = self._supported_float_type(I.dtype)
+        if self.cuda:
+            I = cp.asarray(I, dtype=float_type)
+            O_k = cp.full(I.shape, fill_value=0.5, dtype=float_type)
+            P = cp.asarray(P)
+            convolve_func = convolve
+        else:
+            I = np.asarray(I, dtype=float_type)
+            O_k = np.full(I.shape, fill_value=0.5, dtype=float_type)
+            P = np.asarray(P)
+            convolve_func = np_convolve
+        eps = 1e-12
+        start_time = time.time()
+        P_flipped = np.flip(np.flip(P, 0), 1) if not self.cuda else cp.flip(cp.flip(P, 0), 1)
+        first_frac = (a/2 - (p-1))/(a/2)
+        second_frac = b/(2*a)
+        for i in tqdm(range(1, self.iterations), disable=self.progress_bar):
+            ratio = first_frac - second_frac*(1/(convolve_func(O_k, P_flipped, mode='reflect') + eps)**2)
+            O_k = O_k * convolve_func(ratio, P_flipped, mode='reflect')
+            if i % 10 == 0:  # Print debug info every 10 iterations
+                print(
+                    f"Iteration {i}: max(O_k)={cp.max(O_k) if self.cuda else np.max(O_k)}, min(O_k)={cp.min(O_k) if self.cuda else np.min(O_k)}")
+        O_k[O_k > 1] = 1
+        O_k[O_k < -1] = -1
+        end_time = time.time()
+        if self.timer:
+            print(f'Deconvolution took {end_time - start_time} seconds for {self.iterations} iterations.')
+        if self.cuda:
+            O_k = O_k.get()
+        if self.display:
+            plt.imshow(O_k, cmap='gray')
+            plt.show()
+        return O_k
 
 

@@ -10,7 +10,10 @@ import sys
 from Deconv_class import RichardsonLucy
 #test
 
+
 def sum_datafiles(SDATA, DIFFIMAGES, df, deconv=0, psf=None, iterate=10, regularization=None, lambda_reg=0.05):
+    if deconv != 0:
+        RL = RichardsonLucy(iterations=iterate, cuda=True, timer=False, turn_off_progress_bar=True)
     R = SDATA.detector.upscale
     img_size = DIFFIMAGES.imgsize
     datafiles = [datafile[1] for datafile in df.iterrows()]
@@ -29,7 +32,7 @@ def sum_datafiles(SDATA, DIFFIMAGES, df, deconv=0, psf=None, iterate=10, regular
                 # Deconv1 => sum datafiles with DeconvType1
                 elif deconv == 1:
                     sum_arr += dfile_with_deconvolution_type1(
-                        SDATA, DIFFIMAGES, datafile, psf, iterate, regularization=regularization, lambda_reg=lambda_reg)
+                        SDATA, DIFFIMAGES, datafile, psf, RL, iterate, regularization=regularization, lambda_reg=lambda_reg)
                 # Deconv2 => sum datafiles with DeconvType2
                 elif deconv == 2:
                     sum_arr += dfile_with_deconvolution_type2(
@@ -126,7 +129,7 @@ def dfile_without_deconvolution(SDATA, DIFFIMAGES, datafile):
     return (arr)
 
 
-def dfile_with_deconvolution_type1(SDATA, DIFFIMAGES, datafile, psf, iterate, regularization=None, lambda_reg=0.05):
+def dfile_with_deconvolution_type1(SDATA, DIFFIMAGES, datafile, psf, RL, iterate, regularization=None, lambda_reg=0.05):
     R = SDATA.detector.upscale
     img_size = DIFFIMAGES.imgsize
 
@@ -139,8 +142,14 @@ def dfile_with_deconvolution_type1(SDATA, DIFFIMAGES, datafile, psf, iterate, re
     norm_const = np.max(arr)
     arr_norm = arr / np.max(arr)
     psf_norm = psf / np.max(psf)
-    RL = RichardsonLucy(iterations=iterate, cuda=True, timer=False, turn_off_progress_bar=True)
-    arr_deconv = RL.deconvRL(arr_norm, psf_norm)
+    if regularization == None:
+        arr_deconv = RL.deconvRL(arr_norm, psf_norm)
+    elif regularization == 'TM':
+        arr_deconv = RL.deconvRLTM(arr_norm, psf_norm, lambda_reg)
+    elif regularization == 'TV':
+        arr_deconv = RL.deconvRLTV(arr_norm, psf_norm, lambda_reg)
+    else:
+        print("Unsupported regularization type. Supported types are None, TM and TV.")
     #arr_deconv = restoration.richardson_lucy(
     #    arr_norm, psf_norm, num_iter=iterate)
 
