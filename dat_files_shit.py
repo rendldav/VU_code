@@ -1,47 +1,89 @@
+import cv2
+import matplotlib.pyplot as plt
 import dbase
 import numpy as np
+from PSF_fit import fit_and_sample_voigt_2d, fit_and_sample_gaussian_2d, smooth_psf, average_datafiles
 from Deconv_class import RichardsonLucy
-import matplotlib.pyplot as plt
-import os
 import stemdiff as sd
+import sum
+import sum_Mirek
+import summ
+import summ_Mirek
 import ediff
-from PSF_fit import fit_and_sample_voigt_2d, fit_and_sample_gaussian_2d, smooth_psf, detect_and_extract_peak
+from skimage import transform, measure, morphology
+from skimage.feature import peak_local_max
+import bcorr
+from skimage.filters import threshold_otsu
+from skimage import exposure
+from skimage import io
+from skimage.morphology import remove_small_objects
+from skimage.measure import label, regionprops
+from sklearn.mixture import GaussianMixture
 
+RL = RichardsonLucy(iterations=150)
 img_path = r"C:\Users\drend\OneDrive\Plocha\VU\1_AU\1_AU\DATA"
 df_path = r"C:\Users\drend\OneDrive\Plocha\VU\1_AU\1_AU\DATA\resultsdbase_sum.zip"
-psf = np.load(r"C:\Users\drend\OneDrive\Plocha\VU\1_AU\1_AU\DATA\resultspsf.npy")
-psf_voigt = fit_and_sample_voigt_2d(psf, [100,100])
-psf_gauss = fit_and_sample_gaussian_2d(psf, [100,100])
-psf_kernel = smooth_psf(psf)
-
-print(psf.shape)
-df = dbase.read_database(df_path)
-filenames = df['DatafileName'].tolist()
-
-deconv = RichardsonLucy(iterations=30)
-filepath = os.path.join(img_path, str(filenames[124]))
-data = np.fromfile(filepath, dtype='uint16').reshape((256,256))
-plt.imshow(data, cmap='viridis', vmax=200)
-plt.show()
-data = (data - np.min(data)) / (np.max(data) - np.min(data))
-data = data.astype(np.float64)
 
 SDATA = sd.gvars.SourceData(
     detector=sd.detectors.TimePix(),
     data_dir=img_path,
     filenames=r'*.dat')
 DIFFIMAGES = sd.gvars.DiffImages()
-sum_data_no_dec = sd.summ.sum_datafiles(SDATA, DIFFIMAGES,df, deconv=0, psf=psf, iterate=10)
 
-sum_data10 = sd.summ.sum_datafiles(SDATA, DIFFIMAGES,df, deconv=1, psf=psf_voigt, iterate=10)
-sd.io.Arrays.show(sum_data10, icut=200, cmap='viridis')
+df_sum = dbase.read_database(df_path)
+datafiles = [datafile[1] for datafile in df_sum.iterrows()]
+datafile = df_sum.loc[df_sum['S'].idxmax(), 'DatafileName']
+datafile_name = SDATA.data_dir.joinpath(datafile)
+arr = sd.io.Datafiles.read(SDATA, datafile_name)
+preprocessed_image = bcorr.rolling_ball(arr, radius=1)
+sd.io.Arrays.show(preprocessed_image, icut=150)
 
-sum_data30 = sd.summ.sum_datafiles(SDATA, DIFFIMAGES,df, deconv=1, psf=psf_kernel, iterate=10)
-sd.io.Arrays.show(sum_data30, icut=200, cmap='viridis')
+reshaped_image = preprocessed_image.reshape(-1, 1)
 
-sum_data50 = sd.summ.sum_datafiles(SDATA, DIFFIMAGES,df, deconv=1, psf=psf_gauss, iterate=10)
-sd.io.Arrays.show(sum_data50, icut=200, cmap='viridis')
-sum_data60 = sd.summ.sum_datafiles(SDATA, DIFFIMAGES,df, deconv=1, psf=psf, iterate=10)
-sd.io.Arrays.show(sum_data50, icut=200, cmap='viridis')
+# Apply Gaussian Mixture Model
+gmm = GaussianMixture(n_components=3)
+gmm.fit(reshaped_image)
+gmm_labels = gmm.predict(reshaped_image)
 
-ediff.io.plot_radial_distributions(data_to_plot=[[sum_data_no_dec,'k--','Sum w/o deconvolution'], [sum_data10,'r--','Voigt fit PSF'],[sum_data30,'b--','Kernel estimate PSF'],[sum_data50,'g--','Gauss fit PSF'],[sum_data60,'k-','Central peak PSF']], xlimit=250, ylimit=250)
+# Reshape the labels back to the original image shape
+segmented_image = gmm_labels.reshape(preprocessed_image.shape)
+
+# Create a binary image from the segmented image
+# Assume that the peaks are in the component with the higher mean value
+peak_component = np.argmax(gmm.means_)
+binary_image_gmm = (segmented_image == peak_component).astype(np.uint8)
+binary_image = cv2.morphologyEx(binary_image_gmm, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (2,2)))
+binary_image = cv2.morphologyEx(binary_image, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (2,2)))
+
+labeled_image = label(binary_image)
+new_image = np.zeros_like(arr, dtype=np.float64)
+regions = regionprops(labeled_image)
+for region in regions:
+    if region.area >= 3:
+        coords = region.coords
+        sum_intensity = arr[coords[:, 0], coords[:, 1]].sum()
+        centroid = region.centroid
+        new_image[int(centroid[0]), int(centroid[1])] = sum_intensity
+
+# Display the binary image
+plt.imshow(np.where(arr>150,150, arr), cmap='gray')
+plt.title("Original image")
+plt.axis('off')
+plt.show()
+
+plt.imshow(binary_image_gmm, cmap='gray')
+plt.title("Binary image from GMM")
+plt.axis('off')
+plt.show()
+
+plt.imshow(binary_image, cmap='gray')
+plt.title("Cleaned binary Image with Peaks")
+plt.axis('off')
+plt.show()
+
+plt.imshow(np.where(new_image>150,150, new_image), cmap='gray')
+plt.title("New Image with Peaks")
+plt.axis('off')
+plt.show()
+
+

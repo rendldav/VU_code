@@ -28,7 +28,7 @@ def compute_centroid(data):
     return x_center, y_center
 
 
-def fit_and_sample_voigt_2d(data, output_size):
+def fit_and_sample_voigt_2d(data, output_size, display=False):
     x_center, y_center = compute_centroid(data)
 
     x = np.arange(data.shape[0])
@@ -64,18 +64,18 @@ def fit_and_sample_voigt_2d(data, output_size):
     # Enforce non-negativity
     sampled_model[sampled_model < 0] = 0
 
-    # Plotting the original and sampled PSF in 3D
-    fig = plt.figure(figsize=(14, 6))
+    if display:
+        fig = plt.figure(figsize=(14, 6))
 
-    ax1 = fig.add_subplot(1, 2, 1, projection='3d')
-    ax1.plot_surface(X, Y, data, cmap='viridis', linewidth=0, antialiased=False)
-    ax1.set_title('Original Noisy PSF')
+        ax1 = fig.add_subplot(1, 2, 1, projection='3d')
+        ax1.plot_surface(X, Y, data, cmap='viridis', linewidth=0, antialiased=False)
+        ax1.set_title('Original Noisy PSF')
 
-    ax2 = fig.add_subplot(1, 2, 2, projection='3d')
-    ax2.plot_surface(New_X, New_Y, sampled_model, cmap='viridis', linewidth=0, antialiased=False)
-    ax2.set_title('Sampled PSF from Fitted Model')
+        ax2 = fig.add_subplot(1, 2, 2, projection='3d')
+        ax2.plot_surface(New_X, New_Y, sampled_model, cmap='viridis', linewidth=0, antialiased=False)
+        ax2.set_title('Sampled PSF from Fitted Model')
 
-    plt.show()
+        plt.show()
 
     return sampled_model
 
@@ -97,7 +97,7 @@ def compute_centroid(data):
     return x_center, y_center
 
 
-def fit_and_sample_gaussian_2d(data, output_size):
+def fit_and_sample_gaussian_2d(data, output_size, display=False):
     x_center, y_center = compute_centroid(data)
 
     x = np.arange(data.shape[0])
@@ -133,23 +133,23 @@ def fit_and_sample_gaussian_2d(data, output_size):
     # Enforce non-negativity
     sampled_model[sampled_model < 0] = 0
 
-    # Plotting the original and sampled PSF in 3D
-    fig = plt.figure(figsize=(14, 6))
+    if display:
+        fig = plt.figure(figsize=(14, 6))
 
-    ax1 = fig.add_subplot(1, 2, 1, projection='3d')
-    ax1.plot_surface(X, Y, data, cmap='viridis', linewidth=0, antialiased=False)
-    ax1.set_title('Original Noisy PSF')
+        ax1 = fig.add_subplot(1, 2, 1, projection='3d')
+        ax1.plot_surface(X, Y, data, cmap='viridis', linewidth=0, antialiased=False)
+        ax1.set_title('Original Noisy PSF')
 
-    ax2 = fig.add_subplot(1, 2, 2, projection='3d')
-    ax2.plot_surface(New_X, New_Y, sampled_model, cmap='viridis', linewidth=0, antialiased=False)
-    ax2.set_title('Sampled PSF from Fitted Gaussian Model')
+        ax2 = fig.add_subplot(1, 2, 2, projection='3d')
+        ax2.plot_surface(New_X, New_Y, sampled_model, cmap='viridis', linewidth=0, antialiased=False)
+        ax2.set_title('Sampled PSF from Fitted Gaussian Model')
 
-    plt.show()
+        plt.show()
 
     return sampled_model
 
 
-def smooth_psf(data, sigma=2, kernel_size=5):
+def smooth_psf(data, sigma=2, kernel_size=5, display=False):
     """
     Smooth a 2D PSF array using a Gaussian kernel.
 
@@ -164,21 +164,21 @@ def smooth_psf(data, sigma=2, kernel_size=5):
     # Apply Gaussian filter (kernel size is automatically determined by sigma in scipy)
     smoothed_data = gaussian_filter(data, sigma=sigma)
 
-    # Plotting the original and smoothed PSF in 3D
-    fig = plt.figure(figsize=(14, 6))
-    x = np.arange(data.shape[0])
-    y = np.arange(data.shape[1])
-    X, Y = np.meshgrid(x, y)
+    if display:
+        fig = plt.figure(figsize=(14, 6))
+        x = np.arange(data.shape[0])
+        y = np.arange(data.shape[1])
+        X, Y = np.meshgrid(x, y)
 
-    ax1 = fig.add_subplot(1, 2, 1, projection='3d')
-    ax1.plot_surface(X, Y, data, cmap='viridis', linewidth=0, antialiased=False)
-    ax1.set_title('Original Noisy PSF')
+        ax1 = fig.add_subplot(1, 2, 1, projection='3d')
+        ax1.plot_surface(X, Y, data, cmap='viridis', linewidth=0, antialiased=False)
+        ax1.set_title('Original Noisy PSF')
 
-    ax2 = fig.add_subplot(1, 2, 2, projection='3d')
-    ax2.plot_surface(X, Y, smoothed_data, cmap='viridis', linewidth=0, antialiased=False)
-    ax2.set_title('Smoothed PSF with Gaussian Kernel')
+        ax2 = fig.add_subplot(1, 2, 2, projection='3d')
+        ax2.plot_surface(X, Y, smoothed_data, cmap='viridis', linewidth=0, antialiased=False)
+        ax2.set_title('Smoothed PSF with Gaussian Kernel')
 
-    plt.show()
+        plt.show()
 
     return smoothed_data
 
