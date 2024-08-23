@@ -33,6 +33,8 @@ import idiff
 from skimage import restoration
 import tqdm
 import sys
+import bcorr
+import psf_function
 
 
 def sum_datafiles(SDATA, DIFFIMAGES, df, deconv=0, psf=None, iterate=10):
@@ -334,13 +336,13 @@ def dfile_with_deconvolution_type2(SDATA, DIFFIMAGES, datafile, iterate):
     # (  (i) weak/zero diffractions at edges and (ii) detector edge artifacts
     
     # (3) Remove background
-    arr = idiff.bcorr.rolling_ball(arr, radius=20)
+    arr = bcorr.rolling_ball(arr, radius=20)
     
     # (4) Prepare PSF from the center of given array
     # (recommended parameters:
     # (psf_size => to be specified in the calling script ~ 30
     # (circular => always True - square PSF causes certain artifacts
-    psf = idiff.psf.PSFtype2.get_psf(arr, psf_size, circular=True)
+    psf = psf_function.PSFtype2.get_psf(arr, psf_size, circular=True)
     
     # (5) Deconvolution
     # (a) save np.max, normalize

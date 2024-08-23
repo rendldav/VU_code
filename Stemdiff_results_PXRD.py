@@ -48,17 +48,18 @@ DIFFIMAGES = sd.gvars.DiffImages()
 #sum_data_Mirek = summ_Mirek.sum_datafiles(SDATA, DIFFIMAGES, df_sum, deconv=0, psf=psf, iterate=10)
 #sd.io.Arrays.show(sum_data_Mirek, icut=300, cmap='viridis')
 
-sum_data_David_10iter = sum.sum_datafiles(SDATA, DIFFIMAGES, df_sum, deconv='Segment3', psf=psf, iterate=50, regularization=None)
-#sd.io.Arrays.save_as_image(sum_data_David_10iter, 'segment3_laf3.png', itype='16bit', icut=200)
+#sum_data_David_10iter = sum_Mirek.sum_datafiles(SDATA, DIFFIMAGES, df_sum, deconv=2, psf=psf, iterate=50)
+#sd.io.Arrays.save_as_image(sum_data_David_10iter, 'deconv2_laf3.png', itype='16bit', icut=200)
 #sd.io.Arrays.show(sum_data_David_10iter, icut=300, cmap='viridis')
-
+sum_data_David_10iter = ediff.io.read_image(r"C:\Users\drend\OneDrive\Plocha\VU\pythonProject\FeO_sum_segment3_16bit_for_pxrd.png", itype='16bit')
+sd.io.Arrays.show(sum_data_David_10iter, icut=300, cmap='viridis')
 #sum_data_David_Segment3 = sum.sum_datafiles(SDATA, DIFFIMAGES, df_sum, deconv='Segment3', psf=psf, iterate=10, regularization=None)
 #sd.io.Arrays.show(sum_data_David_Segment3, icut=300, cmap='viridis')
 #sum_data_David_10iter = ediff.io.read_image(r"C:\Users\drend\OneDrive\Plocha\VU\pythonProject\segment3_laf3.png", itype='16bit')
 
 #Deconv
 EDIR = r'./'
-CIF_FILE = r"C:\Users\drend\OneDrive\Plocha\VU\4_MARUSKA_LAF3\laf3_9008114.cif"
+CIF_FILE = r"C:\Users\drend\OneDrive\Plocha\VU\3_FEO_PURE\FEO_PURE.DATA\Fe3O4.cif"
 XRD_FILE = EDIR + 'xrd_au.txt'
 ediff.io.set_plot_parameters(size=(10,5), dpi=120, fontsize=8)
 XTAL = ediff.pxrd.Crystal(structure=CIF_FILE, temp_factors=0.8)
@@ -82,7 +83,7 @@ plt.plot(profile[0], profile[1])
 plt.xlabel('Distance from center [pixels]')
 plt.ylabel('Intensity')
 plt.xlim(0,300)
-plt.ylim(0,200)
+plt.ylim(0,300)
 plt.grid()
 plt.tight_layout()
 plt.show()
@@ -91,7 +92,7 @@ np.savetxt(ED_FILE1, np.transpose(profile), fmt=['%4d', '%8.2f'], header='Column
 
 ED_FILE2 = EDIR + 'ed2_bcorr.txt'
 DATA = ediff.background.InputData(ED_FILE1, usecols=[0,1], unpack=True)
-PPAR = ediff.background.PlotParams(ED_FILE2, 'Pixels', 'Intensity', xlim=[0,300], ylim=[0,80])
+PPAR = ediff.background.PlotParams(ED_FILE2, 'Pixels', 'Intensity', xlim=[0,300], ylim=[0,140])
 IPLOT = ediff.background.InteractivePlot(DATA, PPAR, CLI=False, messages=True)
 IPLOT.run()
 
@@ -122,7 +123,7 @@ fine_tuning = 1
 
 # (c) Plot and save final result graph
 # (we use the {xrd} and {eld} profiles calculated above
-plt.plot(xrd[2], xrd[3], label=r'PXRD of TbF fcc')
+plt.plot(xrd[2], xrd[3], label=r'PXRD of FeO fcc')
 plt.plot(eld[0]*fine_tuning, eld[2], color='red', label='ED experiment')
 plt.xlim(1, 10)
 plt.xlabel(r'$q$ [1/\u212B]')

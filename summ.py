@@ -27,9 +27,10 @@ How it works:
 import os
 import sys
 import tqdm
-import stemdiff.sum
+import sum
 import concurrent.futures as future
-import bcorr
+import numpy as np
+from Deconv_class import RichardsonLucy
 
 
 def sum_datafiles(
@@ -72,19 +73,20 @@ def sum_datafiles(
         - one additional argument: the *function for summation*
         - the *function for summation* depends on the deconvolution type
     '''
+    RL = RichardsonLucy(iterations=iterate, cuda=True, timer=False, turn_off_progress_bar=True)
     
     if deconv == 0:
         arr = multicore_sum(
             SDATA, DIFFIMAGES, df, psf, iterate,
-            func = stemdiff.sum.dfile_without_deconvolution)
+            func = sum.dfile_without_deconvolution)
     elif deconv == 1:
         arr = multicore_sum(
-            SDATA, DIFFIMAGES, df, psf, iterate,
-            func = stemdiff.sum.dfile_with_deconvolution_type1)
+            SDATA, DIFFIMAGES, df, psf, RL, iterate,
+            func = sum.dfile_with_deconvolution_type1)
     elif deconv == 2:
         arr = multicore_sum(
             SDATA, DIFFIMAGES, df, psf, iterate,
-            func = stemdiff.sum.dfile_with_deconvolution_type2)
+            func = sum.dfile_with_deconvolution_type2)
     else:
         print(f'Unknown deconvolution type: deconv={deconv}')
         print('Nothing to do.')
@@ -92,7 +94,7 @@ def sum_datafiles(
     return arr
 
 
-def multicore_sum(SDATA, DIFFIMAGES, df, psf, iterate, func):
+def multicore_sum(SDATA, DIFFIMAGES, df, psf, RL, iterate, func):
     '''
     Execute concurrent data processing using a thread pool.
 
@@ -150,13 +152,13 @@ def multicore_sum(SDATA, DIFFIMAGES, df, psf, iterate, func):
         # (b) Submit tasks to the executor            
         for i, file in enumerate(datafiles): 
             try:
-                if func == stemdiff.sum.dfile_without_deconvolution:
+                if func == sum.dfile_without_deconvolution:
                     future_obj = executor.submit(
                         func, SDATA, DIFFIMAGES, file)
-                elif func == stemdiff.sum.dfile_with_deconvolution_type1:
+                elif func == sum.dfile_with_deconvolution_type1:
                     future_obj = executor.submit(
-                        func, SDATA, DIFFIMAGES, file, psf, iterate)
-                elif func == stemdiff.sum.dfile_with_deconvolution_type2:
+                        func, SDATA, DIFFIMAGES, file, psf, RL, iterate)
+                elif func == sum.dfile_with_deconvolution_type2:
                     future_obj = executor.submit(
                         func, SDATA, DIFFIMAGES, file, iterate)
                 else:
@@ -186,9 +188,9 @@ def multicore_sum(SDATA, DIFFIMAGES, df, psf, iterate, func):
     
     # (3) Results collected, perform post-processing
     # (a) Sum results = the processed/deconvolved files from previous steps
-    sum_arr = sum(deconvolved_data)    
+    sum_arr = np.sum(deconvolved_data)
     # (b) Run post-processing routine = normalization, 
-    final_arr = stemdiff.sum.sum_postprocess(sum_arr,len(deconvolved_data))
+    final_arr = sum.sum_postprocess(sum_arr,len(deconvolved_data))
     
     # (4) Return final array = sum of datafiles with (optional) deconvolution
     return(final_arr)
